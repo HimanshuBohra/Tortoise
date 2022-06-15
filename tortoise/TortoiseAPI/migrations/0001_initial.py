@@ -49,6 +49,7 @@ class Migration(migrations.Migration):
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
                 ('planID', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='TortoiseAPI.plan')),
+                ('promotionID', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='TortoiseAPI.promotions')),
             ],
         ),
     ]

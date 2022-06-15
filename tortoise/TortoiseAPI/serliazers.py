@@ -16,4 +16,4 @@ class PromotionsSerializers(serializers.ModelSerializer):
 class CustomerGoalsSerializers(serializers.ModelSerializer):
     class Meta:
         model=CustomerGoals
-        fields=('ID','userID','selectedAmount','selectedTenure','depositedAmount','benefitPercentage','created_at','updated_at','planID_id')
+        fields=('ID','userID','selectedAmount','selectedTenure','depositedAmount','benefitPercentage','created_at','updated_at','plan_id','promotionID_id')

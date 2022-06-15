@@ -12,7 +12,7 @@ class Plan(models.Model):
     
 
 
-    planID = models.AutoField(primary_key=True)
+    planID = models.AutoField(primary_key=True,auto_created = True)
     planName = models.CharField(max_length=100)
     amountOptions = models.CharField(max_length=200)
     tenureOptions = models.CharField(max_length=200)
@@ -26,7 +26,7 @@ class Plan(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
 class Promotions(models.Model):
-    promotionID = models.AutoField(primary_key=True)
+    promotionID = models.AutoField(primary_key=True,auto_created = True)
     planID = models.ForeignKey(Plan,on_delete=models.CASCADE)
     user_cap = models.IntegerField(max_length=5)
     start_date = models.DateField()
@@ -35,8 +35,9 @@ class Promotions(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
 class CustomerGoals(models.Model):
-    ID = models.AutoField(primary_key=True)
+    ID = models.AutoField(primary_key=True,auto_created = True)
     planID = models.ForeignKey(Plan,on_delete=models.CASCADE)
+    promotionID = models.ForeignKey(Promotions, on_delete=models.CASCADE)
     userID = models.IntegerField(max_length=10)
     selectedAmount = models.IntegerField(max_length=10)
     selectedTenure = models.IntegerField(max_length=10)

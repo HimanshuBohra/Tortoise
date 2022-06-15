@@ -3,6 +3,7 @@ from binascii import rledecode_hqx
 from datetime import date, datetime
 import datetime
 import json
+import re
 from django.shortcuts import render
 from django.views.decorators.csrf import csrf_exempt
 from pymysql import Date
@@ -15,39 +16,33 @@ from TortoiseAPI.serliazers import PlanSerializers,PromotionsSerializers,Custome
 
 
 @csrf_exempt
-def planApi(request,id=0):
+def planApi(request):
     status=1
     message=[]
-    response_data=[]
+    response_data={}
     if request.method=='GET':
         today = datetime.datetime.now().date()
-        plan = Plan.objects.all()
+        plan = Plan.objects.raw("select planID,planName,amountOptions,tenureOptions,benefitPercentage,benefitType,promotions.promotionID,promotions.count,promotions.user_cap , '' as promotion_status from tortoiseapi_plan left join (select tortoiseapi_promotions.promotionID ,tortoiseapi_promotions.planID_id,tortoiseapi_promotions.user_cap, count(tortoiseapi_customergoals.promotionID_id) as count from tortoiseapi_promotions left join tortoiseapi_customergoals on tortoiseapi_promotions.promotionID = tortoiseapi_customergoals.promotionID_id where start_date<=DATE(now()) and end_date>=DATE(now()) group by tortoiseapi_customergoals.promotionID_id) as promotions on promotions.planID_id = tortoiseapi_plan.planID")
         for p in plan:
-            try:          
-                promotion=Promotions.objects.get(planID_id=getattr(p,'planID'))
-                for promo in promotion:
-                    if promotion.end_date:
-                        end_date=datetime.date(promo.end_date)
-                        start_date=datetime.date(promo.start_date)
-                        if start_date <= today <= end_date:
-                            plan_serializer = PlanSerializers(promo,many=True)
-                            response_data.append({'plan':plan_serializer.data,'promotion_applied':1})
-            except:
-                response_data.append({'plan':json.dumps(p),'promotion_applied':0})  
-        return JsonResponse(response_data,safe=False)
+            if p.promotionID and p.count < p.user_cap:
+                p.promotion_status=1
+            else:
+                p.promotion_status=0
+                p.promotionID=''
+            
+        plan_serializedData = [ {'planID': p.planID,'planName': p.planName,'amountOptions':p.amountOptions,'tenureOptions':p.tenureOptions,'benefitPercentage':p.benefitPercentage,'benefitType':p.benefitType,'promotion_applied':p.promotion_status,'promotionID':p.promotionID} for p in plan]
+        if(len(plan_serializedData)):
+            return JsonResponse({'status':1,'data':plan_serializedData},safe=False)
+        return JsonResponse({'status':0,'data':plan_serializedData},safe=False)
     if request.method=='POST':
         try:
-            planName=request.POST['planName']
-            amountOptions=request.POST['amountOptions']
-            amountOptions=json.dumps(amountOptions)
-            amountOptions=json.loads(amountOptions)
-            amountOptions=eval(amountOptions)
-            tenureOptions=request.POST['tenureOptions']
-            tenureOptions=json.dumps(tenureOptions)
-            tenureOptions=json.loads(tenureOptions)
-            tenureOptions=eval(tenureOptions)
-            benefitPercentage=int(request.POST['benefitPercentage'])
-            benefitType=request.POST['benefitType']
+            body = request.body.decode('utf-8')
+            data = json.loads(body)
+            planName=data['planName']
+            amountOptions=data['amountOptions']
+            tenureOptions=data['tenureOptions']
+            benefitPercentage=data['benefitPercentage']
+            benefitType=data['benefitType']
             if not planName or planName=='':
                 status=0
                 message.append('Plan name cannot be empty')
@@ -97,19 +92,15 @@ def planApi(request,id=0):
             return JsonResponse("Failed to Add",safe=False)
     if request.method=='PUT':
         try:
-            planID=request.PUT['planID']
-            planName=request.PUT['planName']
-            amountOptions=request.PUT['amountOptions']
-            amountOptions=json.dumps(amountOptions)
-            amountOptions=json.loads(amountOptions)
-            amountOptions=eval(amountOptions)
-            tenureOptions=request.PUT['tenureOptions']
-            tenureOptions=json.dumps(tenureOptions)
-            tenureOptions=json.loads(tenureOptions)
-            tenureOptions=eval(tenureOptions)
-            benefitPercentage=int(request.PUT['benefitPercentage'])
-            benefitType=request.PUT['benefitType']
-            if not planID or isinstance(planID,int) or planID=='':
+            body = request.body.decode('utf-8')
+            data = json.loads(body)
+            planID=data['planID']
+            planName=data['planName']
+            amountOptions=data['amountOptions']
+            tenureOptions=data['tenureOptions']
+            benefitPercentage=data['benefitPercentage']
+            benefitType=data['benefitType']
+            if not planID or not isinstance(planID,int) or planID=='':
                 status=0
                 message.append('Plan ID has to be an integer value and cannot be empty')
             if planName and planName=='':
@@ -163,6 +154,28 @@ def planApi(request,id=0):
             return JsonResponse("Plan updated successfully",safe=False) 
         except:
             return JsonResponse("Failed to update plan",safe=False)
+    if request.method=='DELETE':
+        body = request.body.decode('utf-8')
+        data = json.loads(body)
+        planID=data['planID']
+        if not planID or not isinstance(planID,int) or planID=='':
+            status=0
+            message.append('Plan ID has to be an integer value and cannot be empty')
+        if status==0:
+            response_data['status']=status
+            response_data['message']=message
+            return JsonResponse(response_data,safe=False)
+        
+        plan = Plan.objects.get(planID = planID)
+        try:
+            if plan.exists():
+                plan.delete()
+                return JsonResponse("Plan deleted successfully",safe=False)
+            return JsonResponse("Plan doesn't exist",safe=False)  
+            
+        except Exception as e:
+            return JsonResponse(e,safe=False)
+
 def promotionApi(request,planID=0):
     status=1
     message=[]
