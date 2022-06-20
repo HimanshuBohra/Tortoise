@@ -5,4 +5,5 @@ from TortoiseAPI import views
 
 urlpatterns = [
     url(r'^plan$',views.planApi),
+    url(r'^promotion$',views.promotionApi),
 ]

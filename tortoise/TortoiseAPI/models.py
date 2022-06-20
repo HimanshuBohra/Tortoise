@@ -22,6 +22,7 @@ class Plan(models.Model):
         choices=benefitType.choices,
         default=benefitType.CASHBACK
     )
+    status = models.SmallIntegerField(max_length=3,default=1)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -31,6 +32,7 @@ class Promotions(models.Model):
     user_cap = models.IntegerField(max_length=5)
     start_date = models.DateField()
     end_date = models.DateField()
+    status = models.SmallIntegerField(max_length=3,default=1)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -43,6 +45,7 @@ class CustomerGoals(models.Model):
     selectedTenure = models.IntegerField(max_length=10)
     depositedAmount = models.IntegerField(max_length=10)
     benefitPercentage = models.IntegerField(max_length=5)
+    status = models.SmallIntegerField(max_length=3,default=1)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
