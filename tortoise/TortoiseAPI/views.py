@@ -12,6 +12,7 @@ from django.http.response import JsonResponse
 
 from TortoiseAPI.models import Plan,Promotions,CustomerGoals
 from TortoiseAPI.serliazers import PlanSerializers,PromotionsSerializers,CustomerGoalsSerializers
+from django.db.models import Q
 
 
 
@@ -234,20 +235,20 @@ def promotionApi(request):
     if request.method=='POST':
         body = request.body.decode('utf-8')
         data = json.loads(body)
-        planID=data['planID']
+        promotionID=data['promotionID']
         promotion_start_date=datetime.datetime.strptime(str(data['start_date']),"%Y-%m-%d").date()
         promotion_end_date=datetime.datetime.strptime(str(data['end_date']),"%Y-%m-%d").date()
         user_cap=data['user_cap'] 
-        if not planID or not isinstance(planID,int) or planID<=0:
+        if not promotionID or not isinstance(promotionID,int) or promotionID<=0:
             status=0
-            message.append('Plan ID has to be an integer value and cannot be empty')
-        if not user_cap or not isinstance(user_cap,int) or user_cap<=0:
+            message.append('Promotion ID has to be an integer value and cannot be empty')
+        if user_cap ( not isinstance(user_cap,int) or user_cap<=0):
             status=0
             message.append('User Capacity variable has to be an integer value and cannot be less than or equal to zero')
-        if not promotion_start_date or promotion_start_date=='' or promotion_start_date < today:
+        if ( promotion_start_date and promotion_start_date=='' or promotion_start_date < today):
             status=0
             message.append('Promotion start date cannot be empty ,Promotion start date has to be of date format and cannot be less than current day')
-        if not promotion_end_date or promotion_end_date=='' or promotion_end_date < today:
+        if ( promotion_end_date or promotion_end_date=='' or promotion_end_date < today):
             status=0
             message.append('Promotion end date cannot be empty ,Promotion end date has to be of date format and cannot be less than current day')
         if promotion_start_date and promotion_end_date and status==1 and promotion_start_date > promotion_end_date:
@@ -259,18 +260,11 @@ def promotionApi(request):
             response_data['message']=message
             return JsonResponse(response_data,safe=False)
 
-        try:
-            promotion=Promotions.objects.filter(planID_id=planID,start_date)
-            if promotion.exists():
-                for p in promotion:
-                    if promotion and promotion.end_date:
-                        end_date = datetime.date(promotion.end_date)
-                        if(end_date>=promotion_start_date):
-                            status=0
-                            message.append('A promotion already exists for this plan ID, please delete this plan or change start date of Promotion')
-                            break
-        except:
-            status=1
+
+        promotion=Promotions.objects.filter(planID_id=planID,start_date__lte=promotion_start_date , end_date__gte=promotion_start_date,status=1) | Promotions.objects.filter(planID_id=planID,start_date__lte=promotion_end_date , end_date__gte=promotion_end_date,status=1)
+        if promotion.exists():
+            status=0
+            message.append('A promotion already exists for this plan ID, please delete this plan or change start date of Promotion')
 
         if status==0:
             response_data['status']=status
@@ -292,13 +286,14 @@ def promotionApi(request):
     if request.method=='PUT':
         body = request.body.decode('utf-8')
         data = json.loads(body)
-        planID=data['promotion']
+        planID=data['planID']
+        promotionID=data['promotionID']
         promotion_start_date=datetime.datetime.strptime(str(data['start_date']),"%Y-%m-%d").date()
         promotion_end_date=datetime.datetime.strptime(str(data['end_date']),"%Y-%m-%d").date()
         user_cap=data['user_cap'] 
-        if not planID or not isinstance(planID,int) or planID<=0:
+        if not promotionID or not isinstance(promotionID,int) or promotionID<=0:
             status=0
-            message.append('Plan ID has to be an integer value and cannot be empty')
+            message.append('Promotion ID has to be an integer value and cannot be empty')
         if not user_cap or not isinstance(user_cap,int) or user_cap<=0:
             status=0
             message.append('User Capacity variable has to be an integer value and cannot be less than or equal to zero')
@@ -317,35 +312,178 @@ def promotionApi(request):
             response_data['message']=message
             return JsonResponse(response_data,safe=False)
 
-        try:
-            promotion=Promotions.objects.get(planID_id=planID)
-            if promotion.exists():
-                for p in promotion:
-                    if promotion and promotion.end_date:
-                        end_date = datetime.date(promotion.end_date)
-                        if(end_date>=promotion_start_date):
-                            status=0
-                            message.append('A promotion already exists for this plan ID, please delete this plan or change start date of Promotion')
-                            break
-        except:
-            status=1
+        promotion_info = Promotions.objects.filter(pk=promotionID,status=1).first()
+        if promotion_info:
+            planID = promotion_info.planID_id
+
+            if promotion_start_date and status==1:
+                promotion = Promotions.objects.filter(status=1,planID_id=planID,start_date__lte=promotion_start_date , end_date__gte=promotion_start_date).exclude(promotionID=promotionID)
+                if promotion.exists():
+                    status=0
+                    message.append('A promotion already exists for this plan ID, please delete this plan or change start date of Promotion')
+                else:
+                    promotion_info.start_date=promotion_start_date
+            if promotion_end_date and status==1:
+                promotion = Promotions.objects.filter(status=1,planID_id=planID,start_date__lte=promotion_end_date , end_date__gte=promotion_end_date).exclude(promotionID=promotionID)
+                if promotion.exists():
+                    status=0
+                    message.append('A promotion already exists for this plan ID, please delete this plan or change end date of Promotion')
+                else:
+                    promotion_info.end_date=promotion_end_date
+            if user_cap and status==1:
+                promotion_info.user_cap=user_cap
+        else:
+            status=0
+            message.append('No Promotion present with this promotionID')
 
         if status==0:
             response_data['status']=status
             response_data['message']=message
             return JsonResponse(response_data,safe=False)
 
-        new_promotion=Promotions()
-        new_promotion.planID_id=planID
-        new_promotion.user_cap=user_cap
-        new_promotion.status=1
-        new_promotion.start_date=promotion_start_date
-        new_promotion.end_date=promotion_end_date
+        try:
+            promotion_info.save()
+            return JsonResponse("Promotion updated successfully",safe=False) 
+        except:
+            return JsonResponse("Failed to update Promotion",safe=False)
+    if request.method=='DELETE':
+        body = request.body.decode('utf-8')
+        data = json.loads(body)
+        promotionID=data['promotionID']
+        if not promotionID or not isinstance(promotionID,int) or promotionID=='':
+            status=0
+            message.append('promotionID has to be an integer value and cannot be empty')
+        if status==0:
+            response_data['status']=status
+            response_data['message']=message
+            return JsonResponse(response_data,safe=False)
+        
+        promotion = Promotions.objects.filter(pk=promotionID).first()
+        try:
+            if promotion:
+                promotion.status=0
+                promotion.save()
+                return JsonResponse("Promotion deleted successfully",safe=False)
+            return JsonResponse("Promotion doesn't exist",safe=False)  
+            
+        except Exception as e:
+            return JsonResponse(e,safe=False)
+        
+@csrf_exempt
+def customerGoalsApi(request):
+    status=1
+    message=[]
+    response_data={}
+    if request.method=='GET':
+        body = request.body.decode('utf-8')
+        data = json.loads(body)
+        userID=data['userID']
+        if userID and ( not isinstance(userID,int) or userID<=0 ):
+            status=0
+            message.append('UserID has to in Integer format')
+        
+        if status==0:
+            response_data['status']=status
+            response_data['message']=message
+            return JsonResponse(response_data,safe=False)
+
+        if userID:
+            customergoals = CustomerGoals.objects.filter(userID=userID,status=1)
+
+            customergoals = CustomerGoals.objects.raw("select userID, tortoiseapi_customergoals.selectedAmount,tortoiseapi_customergoals.selectedTenure , tortoiseapi_customergoals.depositedAmount,tortoiseapi_customergoals.planID_id , tortoiseapi_plan.planName from tortoiseapi_customergoals left join tortoiseapi_plan on tortoiseapi_customergoals.planID_id = tortoiseapi_plan.planID where tortoiseapi_customergoals.status = 1",userID=userID)
+        else:
+            customergoals = CustomerGoals.objects.raw("select userID, tortoiseapi_customergoals.selectedAmount,tortoiseapi_customergoals.selectedTenure , tortoiseapi_customergoals.depositedAmount,tortoiseapi_customergoals.planID_id , tortoiseapi_plan.planName from tortoiseapi_customergoals left join tortoiseapi_plan on tortoiseapi_customergoals.planID_id = tortoiseapi_plan.planID where tortoiseapi_customergoals.status = 1")
+        
+        try:     
+            if customergoals.exists(): 
+                customergoals_serializedData = [ {'userID': p.userID,'selectedAmount': p.selectedAmount,'selectedTenure':p.selectedTenure,'depositedAmount':p.depositedAmount,'benefitPercentage':p.benefitPercentage,'planName':p.planName} for p in customergoals]
+                count=len(customergoals_serializedData)
+        except:
+            count = 0
+            customergoals_serializedData = []
+        return JsonResponse({'status':1,'count':count,'data':customergoals_serializedData},safe=False)
+    if request.methos=='POST':
+        body = request.body.decode('utf-8')
+        data = json.loads(body)
+        planID=data['planID']
+        promotionID=data['promotionID']
+        tenureOptions=data['tenureOptions']
+        selectedAmount=data['selectedAmount']
+        selectedTenure=data['selectedTenure']
+        depositedAmount=data['depositedAmount']
+        benefitPercentage=data['benefitPercentage']
+
+        if not planID or planID=='' or not isinstance(planID,int):
+            status=0
+            message.append('Plan ID has to be an integer value and cannot be empty')
+        if not promotionID or promotionID=='' or not isinstance(promotionID,int):
+            status=0
+            message.append('promotionID has to be an integer value and cannot be empty')
+        if not tenureOptions or tenureOptions=='' or not isinstance(tenureOptions,int) or tenureOptions <= 0:
+            status=0
+            message.append('tenureOptions has to be an integer value and cannot be empty')
+        if not selectedAmount or selectedAmount=='' or not isinstance(selectedAmount,int) or selectedAmount <= 0:
+            status=0
+            message.append('selectedAmount has to be an integer value and cannot be empty')
+        if not selectedTenure or selectedTenure=='' or not isinstance(selectedTenure,int) or selectedTenure<=0:
+            status=0
+            message.append('selectedTenure has to be an integer value and cannot be empty')
+        if not depositedAmount or depositedAmount=='' or not isinstance(depositedAmount,int) or depositedAmount<=0:
+            status=0
+            message.append('depositedAmount has to be an integer value and cannot be empty')
+        if not benefitPercentage or benefitPercentage=='' or not isinstance(benefitPercentage,int) or benefitPercentage<=0:
+            status=0
+            message.append('benefitPercentage has to be an integer value and cannot be empty')
+
+        if status==0:
+            response_data['status']=status
+            response_data['message']=message
+            return JsonResponse(response_data,safe=False)
+        
+        customergoals = CustomerGoals()
+        customergoals.userID=userID
+        customergoals.planID_id=planID
+        customergoals.promotionID_id=promotionID
+        customergoals.selectedTenure=selectedTenure
+        customergoals.selectedAmount=selectedAmount
+        customergoals.depositedAmount=depositedAmount
+        customergoals.benefitPercentage=benefitPercentage
+        customergoals.status=1
+        customergoals.created_at=datetime.now()
+        customergoals.updated_at=datetime.now()
 
         try:
-            new_promotion.save()
-            return JsonResponse("Promotion added successfully",safe=False) 
+            customergoals.save()
+            return JsonResponse("Customer Goals created successfully",safe=False)
         except:
-            return JsonResponse("Failed to add Promotion",safe=False)
+            return JsonResponse("Customer Goals creation failed",safe=False)
+
+    if request.method=='DELETE':
+        body = request.body.decode('utf-8')
+        data = json.loads(body)
+        customerGoalID=data['customerGoalID']
+
+        if not customerGoalID or customerGoalID=='' or not isinstance(customerGoalID,int):
+            status=0
+            message.append('customerGoalID has to be an integer value and cannot be empty')
         
+        customergoals=CustomerGoals.objects.filter(customerGoalID=customerGoalID,status=1).first()
+        if customergoals:
+            try:
+                customergoals.status=0
+                customergoals.save()
+                return JsonResponse("Customer Goals deleted successfully",safe=False)
+            except:
+                return JsonResponse("Customer Goals deletion failed",safe=False)
+        else:
+            return JsonResponse("Customer Goals not found",safe=False)
+        
+        
+
+
+
+
+
+
+
 
